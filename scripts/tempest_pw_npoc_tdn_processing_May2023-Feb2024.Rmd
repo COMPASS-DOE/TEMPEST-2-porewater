@@ -1,23 +1,26 @@
-## This script imports raw data for NPOC and TDN measured using a Shimadzu TOC-L
-## at PNNL MCRL and exports clean, Level 1 QC'ed data. 
-## Raw Data are read in from GitHub
-## 
-## Created: 2022-01-15 by Peter Regier for EXCHANGE
-## Updated: 2022-06-26 by Allison Myers-Pigg for TEMPEST
-## 
-##
-# #############
-# #############
+---
+title: "TMP Porewater Processing Markdown"
+author: "AMP"
+date: "`r Sys.Date()`"
+output: html_document
+---
 
-# 1. Setup ---------------------------------------------------------------------
+This script imports raw data for NPOC and TDN measured using a Shimadzu TOC-L at PNNL MCRL and exports clean, Level 1 QC'ed data. Raw Data are read in from GitHub
 
+Created: 2022-01-15 by Peter Regier for EXCHANGE
+Updated: 2022-06-26 by Allison Myers-Pigg for TEMPEST
+Updated and adapted for markdown: 2024-02-10 by Allison Myers-Pigg for TEMPEST 2.0
+
+# Set Up 
+```{r setup, include=FALSE}
 # load packages
 require(pacman)
 pacman::p_load(tidyverse, # keep things tidy
                janitor, # useful for simplifying column names
                googlesheets4, # read_sheet 
                googledrive, # drive_ functions
-               plotrix ) 
+               plotrix,
+               here) 
 
 #double check your wd. should be ../tempest-system-level-analysis
 #if not you need to do new relative file pathing
@@ -27,10 +30,13 @@ getwd()
 
 ## Set Github filepath for NPOC raw data files:
 
-directory = "../tempest-system-level-analysis/data/raw/DOC"
+directory= file.path(here() %>% dirname(), 'tempest-system-level-analysis/data/raw/DOC')
 
-# 2. Functions -----------------------------------------------------------------
+```
 
+# Functions
+
+```{r functions, include=FALSE}
 ## Create a function to read in data
 read_data <- function(data){
   # First, scrape date from filename
@@ -56,45 +62,81 @@ read_mes <- function(readme){
     select(sample_name, Action, sample_vol, total_vol) %>% 
     mutate(rundate = rundate)
 }
+```
 
-# 3. Import data ---------------------------------------------------------------
+# Set Up Date Ranges
 
-## Create a list of files to download
-files <- list.files(path = directory, pattern = "Summary", full.names = TRUE) 
-ReadMes <- list.files(path = directory, pattern = "Readme", full.names = TRUE) 
+```{r figure out files to use,include=TRUE}
+files <- list.files(path = here::here(directory), pattern = "Summary", full.names = TRUE) 
+ReadMes <- list.files(path = here::here(directory), pattern = "Readme", full.names = TRUE) 
+
+files
+
+
+```
+Set the event (NEED TO MAKE SURE THIS IS RIGHT!!!)
+```{r event and study dates}
+endstudydate = lubridate::as_date("2024-01-31")
+startstudydate = lubridate::as_date("2023-05-31")
+  
+WaterDeliveryStart1 = as.POSIXct("2023-06-06 05:30:00", tz = "EST")
+WaterDeliveryStop1 = as.POSIXct("2023-06-06 14:30:00", tz = "EST")
+
+WaterDeliveryStart2 = as.POSIXct("2023-06-07 05:30:00", tz = "EST")
+WaterDeliveryStop2 = as.POSIXct("2023-06-07 14:30:00", tz = "EST")
+```
+
+Input your run dates of interest into the files_dates dataframe: 
+```{r set dates for analysis, include=TRUE}
+
+files_dates = c("20230531",
+                "20230608",
+                "20230609",
+                "20230622",
+                "20230706",
+                "20230824",
+                "20231010",
+                "20231012",
+                "20231115",
+                "20231214")
+
+
+  
+```
+
+IDK WHY THIS CHUNK DOES NOT WORK IN MARKDOWN, BUT IT DOES IN THE CONSOLE SO JUST DO THAT....
+# Import Data
+```{import data, include= TRUE}
 
 npoc_raw <- files %>% 
   map_df(read_data) %>% 
   filter(grepl("TMP", sample_name)) %>% # filter to TMP samples only
-  filter(grepl("202207|202208|202209|202210|202211|202212|202301|202302|202303|202304|202305|202306", rundate)) %>% # filter to just run dates you need 
+  filter(rundate %in% files_dates) %>% # filter to just run dates you need 
   bind_rows() 
 
 blanks_raw <- files %>% 
   map_df(read_data) %>% 
   filter(grepl("^Blank", sample_name)) %>% # filter to blanks only
-  filter(grepl("202207|202208|202209|202210|202211|202212|202301|202302|202303|202304|202305|202306", rundate)) %>% # filter to just run dates you need
+ filter(rundate %in% files_dates) %>% # filter to just run dates you need 
   bind_rows() 
 
 readmes_dilution_action <- ReadMes %>% 
   map_df(read_mes) %>% 
   filter(grepl("TMP", sample_name)) %>% # filter to TMP samples only
   filter(grepl("ilution correction", Action)) %>%
-  filter(grepl("202207|202208|202209|202210|202211|202212|202301|202302|202303|202304|202305|202306", rundate)) %>% # filter to just run dates you need
+filter(rundate %in% files_dates) %>% # filter to just run dates you need 
   bind_rows() 
 
 readmes_all <- ReadMes %>% 
   map_df(read_mes) %>% 
   filter(grepl("TMP", sample_name)) %>% # filter to TMP samples only
-  filter(grepl("202207|202208|202209|202210|202211|202212|202301|202302|202303|202304|202305|202306", rundate)) %>% # filter to just run dates you need 
-  mutate(Action = case_when(sample_name == "TMP_SW_F4_T3" ~ "Omit", # due to incorrect duplicate naming
-                            TRUE ~ Action)) %>%
+filter(rundate %in% files_dates) %>% # filter to just run dates you need 
   bind_rows() 
 
 curvepts <-files %>% 
   map_df(read_data) %>% 
   filter(grepl("STD_", sample_name)) %>% # filter to curves only
-  filter(grepl("202207|202208|202209|202210|202211|202212|202301|202302|202303|202304|202305|202306", rundate)) %>%
-  filter(!grepl("10/25/2022 7:24:33 PM|9/22/2022 9:03:23 PM", run_datetime)) %>% # filter to just run dates you need 
+filter(rundate %in% files_dates) %>% # filter to just run dates you need 
   rename(standard_high_C = npoc_raw,
          standard_high_N = tdn_raw) %>%
   select(rundate,standard_high_C,standard_high_N) %>%
@@ -104,10 +146,11 @@ curvepts <-files %>%
   distinct()%>%
   pivot_wider(names_from= name, values_from = value)%>%
   bind_rows() 
+```
 
+# Calculate blanks and add to data
 
-# 4. Calculate blanks and add to data ------------------------------------------
-
+```{r blanks}
 blanks <- blanks_raw %>% 
   filter(!run_datetime %in% NA) %>% 
   mutate(npoc_raw = ifelse(npoc_raw > 0, npoc_raw, NA)) %>%
@@ -120,9 +163,11 @@ blanks <- blanks_raw %>%
   select(rundate, npoc_blank, npoc_blank_SD, tdn_blank, tdn_blank_SD)
 
 View(blanks) # Check out the blank data 
+```
 
-# 5. Flag sketch data -----------------------------------------------------------
+# Flag sketch data 
 
+```{r flagging} 
 npoc_flagged <- npoc_raw %>% 
   filter(grepl("TMP", sample_name)) %>% # filter to TMP samples only
   inner_join(blanks, by = "rundate") %>% 
@@ -139,9 +184,11 @@ npoc_flagged <- npoc_raw %>%
          # tdn_raw = case_when(tdn_flag == "incorrect sample naming, cannot resolve" ~ NA,
          #                     TRUE ~ tdn_raw)
   )
+```
 
-# 6. Dilution Corrections ------------------------------------------------------
+# Dilution Corrections & Flagging 
 
+```{r dilutions}
 dilutions = 
   readmes_dilution_action %>% 
   mutate(Dilution =  total_vol/sample_vol) %>% 
@@ -187,11 +234,11 @@ View(duplicates)
 
 #MANUALLY Fix sample names and see if there were multiple of the same sample split for some reason run:
 
-all_samples_dilution_corrected2 <- all_samples_dilution_corrected %>% 
-  mutate(sample_name = stringr::str_replace(sample_name,"_A","")) %>%
-  mutate(sample_name = stringr::str_replace(sample_name,"_B","")) %>%
-  mutate(sample_name = stringr::str_replace(sample_name,"POOLED","POOL")) %>%
-  mutate(sample_name = stringr::str_replace(sample_name,"_Subsample","")) 
+ all_samples_dilution_corrected2 <- all_samples_dilution_corrected %>% 
+   mutate(sample_name = stringr::str_replace(sample_name,"_A","")) %>%
+   mutate(sample_name = stringr::str_replace(sample_name,"_B","")) %>%
+   mutate(sample_name = stringr::str_replace(sample_name,"POOLED","POOL")) %>%
+   mutate(sample_name = stringr::str_replace(sample_name,"_Subsample","")) 
   
 reps <- all_samples_dilution_corrected2  %>%
   group_by(sample_name) %>%
@@ -232,12 +279,14 @@ reps_clean <- reps %>%
   mutate(npoc_flag = case_when(doc_mg_l == 'NaN' ~ "replicates greater than 25% different"),
          tdn_flag = case_when(tdn_mg_l == 'NaN' ~ "replicates greater than 25% different"),
          date = stringr::str_extract(sample_name, "[0-9]{8}"))
-
-## 7. Clean data ----------------------------------------------------------------
-
 #Need to merge those:
 npoc_dups_merged <- samples_dilution_corrected2_no_reps %>% 
   bind_rows(reps_clean)
+```
+
+# Clean data 
+
+```{r start cleaning}
 
 ## Flagging data
 npoc_flags <- npoc_dups_merged %>% 
@@ -280,8 +329,6 @@ npoc_wflags_metadata <-  npoc_flags %>%
          time = strftime(time, "%H:%M:%S")) %>%
   filter(!is.na(date))
 
-endstudydate = lubridate::as_date("2023-05-31")
-startstudydate = lubridate::as_date("2022-07-01")
 
 PW_npoc_wflags_metadata <- npoc_wflags_metadata %>%
   filter(date < endstudydate & date > startstudydate) %>%
@@ -304,11 +351,13 @@ PW_npoc_wflags_metadata_summarized <- PW_npoc_wflags_metadata  %>%
             date = min(date),
             .groups = "drop") 
   
+```
 
-# 8. Write data ----------------------------------------------------------------
+# Write data
 
-#not sure the blank is >25% is staying to the end of this data frame 
-write_csv(PW_npoc_wflags_metadata , "../TEMPEST-1-porewater/data/TMP_PW_NPOC_TDN_L1_Jul2022-May2023.csv")
+```{r write}
 
-write_csv(PW_npoc_wflags_metadata_summarized, "../TEMPEST-1-porewater/data/TMP_PW_NPOC_TDN_L2_Summary_Jul2022-May2023.csv")
+write_csv(PW_npoc_wflags_metadata , "../TEMPEST-2-porewater/data/TMP_PW_NPOC_TDN_L1_Jun2023-Dec2023.csv")
 
+write_csv(PW_npoc_wflags_metadata_summarized, "../TEMPEST-2-porewater/data/TMP_PW_NPOC_TDN_L2_Summary_Jun2023-Dec2023.csv")
+```

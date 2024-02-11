@@ -1,0 +1,54 @@
+---
+title: "figures"
+author: "AMP"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load data}
+pw2022event <- read_csv("../tempest-system-level-analysis/data/for manuscript/TMP_PW_NPOC_TDN_L2_2022_jun_jul_gapfilled_summarized.csv")
+pw2022 <- read_csv("../TEMPEST-1-porewater/data/TMP_PW_NPOC_TDN_L2_Summary_Jul2022-May2023.csv")
+pw2023 <- read_csv("../TEMPEST-2-porewater/data/TMP_PW_NPOC_TDN_L2_Summary_Jun2023-Dec2023.csv")
+
+all_the_doc <- pw2022event %>%
+  full_join(pw2022) %>%
+  full_join(pw2023) %>%
+  mutate(date = as.POSIXct(date)) %>%
+  mutate(Plot = stringr::str_replace(Plot,"SW","Estuarine-water Plot")) %>%
+  mutate(Plot = stringr::str_replace(Plot,"FW","Freshwater Plot")) %>%
+  mutate(Plot = stringr::str_replace(Plot,"C","Control Plot"))
+```
+
+```{r figures for COMPASS Meeting 2/12}
+Start = as.POSIXct("2022-06-22 05:30:00", tz="UTC")
+End = as.POSIXct("2022-06-22 14:30:00", tz="UTC")
+plot_order <- c('Control Plot', 'Freshwater Plot','Estuarine-water Plot')
+Anyas_colors_alpha_order = c("springgreen2", "violetred2", "cyan2")
+
+plot_all_the_doc <- all_the_doc %>%
+    ggplot() +
+  #     # Water 2022
+   annotate("rect", xmin = Start, xmax = End, ymin = -Inf, ymax = Inf, fill = "blue")+
+  #  # Water 1
+    annotate("rect", xmin = as.POSIXct("2023-06-06 06:00:00"), xmax = as.POSIXct("2023-06-06 16:00:00"), ymin = -Inf, ymax = Inf, fill = "blue") +
+  # #Water 2
+    annotate("rect", xmin = as.POSIXct("2023-06-07 06:00:00"), xmax = as.POSIXct("2023-06-07 16:00:00"), ymin = -Inf, ymax = Inf, fill = "blue") +
+   scale_x_datetime(minor_breaks= waiver(),date_minor_breaks = "1 month", date_breaks="2 months",date_labels= '%b')+
+    geom_errorbar(aes(x = date, ymin =doc_mg_l - doc_mg_l_sd, ymax=doc_mg_l + doc_mg_l_sd, color = Plot))+
+    geom_point(aes(x = date, y =doc_mg_l, color = Plot), size = 2)+
+    ylab("DOC mgC/L")+
+    xlab("Date")+
+    ylim(0,100)+
+   # stat_summary(aes(y = doc_mg_l,group=1), fun=median, colour="grey", geom="smooth",group=1)+
+   scale_color_manual(values=Anyas_colors_alpha_order) +
+ # scale_x_datetime(minor_breaks= waiver(),date_breaks="2 months", limits= c(as.POSIXct("2022-05-03 05:30:00", tz="UTC"), as.POSIXct("2023-06-30 15:20:00", tz="UTC")),date_labels= '%b')+
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+  theme_classic()
+  
+print(plot_all_the_doc)
+cowplot::save_plot("./figures/doc_pw_all_2022-2023.png",plot_all_the_doc, dpi=300)
+```
