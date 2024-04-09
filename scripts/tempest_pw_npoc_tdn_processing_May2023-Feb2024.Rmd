@@ -339,6 +339,7 @@ PW_npoc_wflags_metadata <- npoc_wflags_metadata %>%
 PW_npoc_wflags_metadata_summarized <- PW_npoc_wflags_metadata  %>%
   group_by(Plot, date) %>% 
   filter(Grid != "POOL") %>%
+  filter(!sample_name %in% "Lysimeter Empty") %>%
   filter(!npoc_flag %in% "omitted for high dilution and blank values") %>%
   filter(!tdn_flag %in% "omitted for high dilution and blank values") %>%
   summarise(n=n(),
